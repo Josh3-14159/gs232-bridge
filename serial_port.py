@@ -9,6 +9,7 @@ Reads from the master fd, passes each line to gs232_parser, and
 dispatches to the controller.  Runs in its own thread.
 """
 
+import errno
 import logging
 import os
 import select
@@ -127,6 +128,13 @@ class SerialPort:
             try:
                 chunk = os.read(self._master_fd, 256)
             except OSError as exc:
+                if exc.errno == errno.EIO:
+                    # EIO means no client has the slave end open.
+                    # This is normal — just wait for screen / telescope SW to connect.
+                    log.debug("PTY has no client, waiting...")
+                    self._stop_ev.wait(timeout=_READ_TIMEOUT)
+                    buf = b''
+                    continue
                 log.error("PTY read error: %s", exc)
                 break
 
