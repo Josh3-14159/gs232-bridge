@@ -73,12 +73,15 @@ class SerialPort:
         attrs[5] = baud_const   # ospeed
         termios.tcsetattr(slave_fd, termios.TCSANOW, attrs)
 
+        # Get slave name before closing slave fd —
+        # os.ttyname() on the master returns /dev/pts/ptmx, not the slave path.
+        slave_name = os.ttyname(slave_fd)
+
         # Slave fd can be closed in this process — the PTY stays alive as
         # long as the master fd is open.
         os.close(slave_fd)
 
         symlink_path = Path(self._cfg.get('serial', 'pty_symlink'))
-        slave_name   = os.ttyname(master_fd)
 
         # Remove stale symlink if present
         try:
