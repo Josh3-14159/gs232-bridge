@@ -116,10 +116,11 @@ def main() -> None:
 
     log.info("starting gs232-bridge")
 
+    started = []
     try:
-        serial.start()
-        controller.start()
-        watchdog.start()
+        serial.start();     started.append(serial)
+        controller.start(); started.append(controller)
+        watchdog.start();   started.append(watchdog)
         log.info("all modules running — PTY at %s", cfg.get('serial', 'pty_symlink'))
 
         # Block main thread until a shutdown signal arrives
@@ -127,9 +128,12 @@ def main() -> None:
 
     finally:
         log.info("shutting down...")
-        watchdog.stop()
-        controller.stop()   # stops motors before serial closes
-        serial.stop()
+        # Only stop modules that successfully started, in reverse order
+        for module in reversed(started):
+            try:
+                module.stop()
+            except Exception as exc:
+                log.error("error stopping %s: %s", module.__class__.__name__, exc)
         log.info("gs232-bridge stopped cleanly")
 
 
