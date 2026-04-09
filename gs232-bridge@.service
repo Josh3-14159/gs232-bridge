@@ -2,8 +2,10 @@
 Description=GS-232 telescope bridge
 Documentation=https://github.com/Josh3-14159/rp2040-gpio-fs
 # Start after the FUSE filesystem is mounted (udev+systemd template unit)
-After=network.target rp2040fs@%i.service
-BindsTo=rp2040fs@%i.service
+After=network.target
+# Uncomment once rp2040-gpio-fs is installed and confirmed working:
+# After=network.target rp2040fs@%i.service
+# BindsTo=rp2040fs@%i.service
 
 [Service]
 Type=simple
@@ -12,6 +14,11 @@ ExecStart=/usr/bin/python3 /opt/gs232_bridge/main.py --config /opt/gs232_bridge/
 
 # SIGHUP reloads config without restart
 ExecReload=/bin/kill -HUP $MAINPID
+
+# Permission to create symlinks in /dev/ for SDRAngel and other software
+# that expects a device path under /dev/.
+AmbientCapabilities=CAP_DAC_OVERRIDE
+CapabilityBoundingSet=CAP_DAC_OVERRIDE
 
 # Clean restart on unexpected crash (not on clean exit or SIGTERM)
 Restart=on-failure

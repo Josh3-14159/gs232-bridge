@@ -95,14 +95,32 @@ class SerialPort:
         self._master_fd = master_fd
         self._slave_fd  = slave_fd
         self._symlink   = symlink_path
+
+        # Create any additional symlinks (e.g. /dev/ttyGS232 for SDRAngel).
+        # These require the process to have write access to /dev/ —
+        # see the service file for the required permissions.
+        extra = self._cfg.get('serial', 'pty_symlink_extra', fallback='').strip()
+        self._extra_symlinks: list[Path] = []
+        if extra:
+            for raw_path in (p.strip() for p in extra.split(',') if p.strip()):
+                ep = Path(raw_path)
+                try:
+                    ep.unlink(missing_ok=True)
+                    ep.symlink_to(slave_name)
+                    self._extra_symlinks.append(ep)
+                    log.info("extra symlink: %s -> %s", ep, slave_name)
+                except OSError as exc:
+                    log.warning("could not create extra symlink %s: %s", ep, exc)
+
         log.info("PTY ready: %s -> %s", symlink_path, slave_name)
 
     def _cleanup(self) -> None:
-        if self._symlink:
-            try:
-                self._symlink.unlink(missing_ok=True)
-            except OSError:
-                pass
+        for link in [self._symlink] + getattr(self, '_extra_symlinks', []):
+            if link:
+                try:
+                    link.unlink(missing_ok=True)
+                except OSError:
+                    pass
         for fd_attr in ('_slave_fd', '_master_fd'):
             fd = getattr(self, fd_attr)
             if fd is not None:
