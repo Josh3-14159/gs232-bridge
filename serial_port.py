@@ -108,6 +108,17 @@ class SerialPort:
             except OSError:
                 pass
 
+    def _reopen_pty(self) -> None:
+        # Close the old master fd and open a fresh PTY, keeping the symlink path.
+        if self._master_fd is not None:
+            try:
+                os.close(self._master_fd)
+            except OSError:
+                pass
+            self._master_fd = None
+        self._open_pty()
+        log.info('PTY recreated, ready for new client connection')
+
     # ------------------------------------------------------------------
     # Read / dispatch loop
     # ------------------------------------------------------------------
@@ -129,11 +140,16 @@ class SerialPort:
                 chunk = os.read(self._master_fd, 256)
             except OSError as exc:
                 if exc.errno == errno.EIO:
-                    # EIO means no client has the slave end open.
-                    # This is normal — just wait for screen / telescope SW to connect.
-                    log.debug("PTY has no client, waiting...")
+                    # EIO means the client disconnected (screen quit, SW closed port).
+                    # Recreate the PTY so a fresh client can reconnect cleanly.
+                    log.info("PTY client disconnected, recreating PTY...")
                     self._stop_ev.wait(timeout=_READ_TIMEOUT)
                     buf = b''
+                    try:
+                        self._reopen_pty()
+                    except OSError as reopen_exc:
+                        log.error("PTY reopen failed: %s", reopen_exc)
+                        break
                     continue
                 log.error("PTY read error: %s", exc)
                 break
