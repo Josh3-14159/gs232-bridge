@@ -33,6 +33,7 @@ class SerialPort:
         self._controller = controller
         self._stop_ev    = threading.Event()
         self._master_fd: int | None = None
+        self._slave_fd:  int | None = None   # kept open to prevent EIO on client disconnect
         self._symlink: Path | None  = None
         self._thread = threading.Thread(
             target=self._loop,
@@ -74,14 +75,13 @@ class SerialPort:
         attrs[5] = baud_const   # ospeed
         termios.tcsetattr(slave_fd, termios.TCSANOW, attrs)
 
-        # Get slave name before closing slave fd —
+        # Get slave name while we have the fd.
         # os.ttyname() on the master returns /dev/pts/ptmx, not the slave path.
         slave_name = os.ttyname(slave_fd)
 
-        # Slave fd can be closed in this process — the PTY stays alive as
-        # long as the master fd is open.
-        os.close(slave_fd)
-
+        # Keep slave_fd open in this process.  As long as we hold it, the PTY
+        # never goes dead when a client (screen / telescope SW) disconnects —
+        # EIO only fires when NO process has the slave open.
         symlink_path = Path(self._cfg.get('serial', 'pty_symlink'))
 
         # Remove stale symlink if present
@@ -93,6 +93,7 @@ class SerialPort:
         symlink_path.symlink_to(slave_name)
 
         self._master_fd = master_fd
+        self._slave_fd  = slave_fd
         self._symlink   = symlink_path
         log.info("PTY ready: %s -> %s", symlink_path, slave_name)
 
@@ -102,20 +103,25 @@ class SerialPort:
                 self._symlink.unlink(missing_ok=True)
             except OSError:
                 pass
-        if self._master_fd is not None:
-            try:
-                os.close(self._master_fd)
-            except OSError:
-                pass
+        for fd_attr in ('_slave_fd', '_master_fd'):
+            fd = getattr(self, fd_attr)
+            if fd is not None:
+                try:
+                    os.close(fd)
+                except OSError:
+                    pass
+                setattr(self, fd_attr, None)
 
     def _reopen_pty(self) -> None:
-        # Close the old master fd and open a fresh PTY, keeping the symlink path.
-        if self._master_fd is not None:
-            try:
-                os.close(self._master_fd)
-            except OSError:
-                pass
-            self._master_fd = None
+        # Close both fds and open a fresh PTY, keeping the symlink path.
+        for fd_attr in ('_slave_fd', '_master_fd'):
+            fd = getattr(self, fd_attr)
+            if fd is not None:
+                try:
+                    os.close(fd)
+                except OSError:
+                    pass
+                setattr(self, fd_attr, None)
         self._open_pty()
         log.info('PTY recreated, ready for new client connection')
 
