@@ -10,15 +10,16 @@ After=network.target
 [Service]
 Type=simple
 User=%i
+RuntimeDirectory=gs232-bridge
+RuntimeDirectoryMode=0755
 ExecStart=/usr/bin/python3 /opt/gs232_bridge/main.py --config /opt/gs232_bridge/config.ini
+# Create /dev/ttyGS232 symlink as root so SDRAngel can find it in /dev/tty*
+ExecStartPost=/usr/local/bin/gs232-mklink
+# Remove /dev/ttyGS232 on stop
+ExecStopPost=/bin/rm -f /dev/ttyGS232
 
 # SIGHUP reloads config without restart
 ExecReload=/bin/kill -HUP $MAINPID
-
-# Permission to create symlinks in /dev/ for SDRAngel and other software
-# that expects a device path under /dev/.
-AmbientCapabilities=CAP_DAC_OVERRIDE
-CapabilityBoundingSet=CAP_DAC_OVERRIDE
 
 # Clean restart on unexpected crash (not on clean exit or SIGTERM)
 Restart=on-failure

@@ -48,6 +48,11 @@ else
 fi
 
 chown -R "$DEPLOY_USER:$DEPLOY_USER" "$INSTALL_DIR"
+
+info "Installing gs232-mklink helper"
+cp gs232-mklink /usr/local/bin/gs232-mklink
+chmod 755 /usr/local/bin/gs232-mklink
+chown root:root /usr/local/bin/gs232-mklink
 chmod 755 "$INSTALL_DIR"
 chmod 644 "$INSTALL_DIR"/*.py "$INSTALL_DIR/config.ini"
 

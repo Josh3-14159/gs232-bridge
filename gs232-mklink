@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# gs232-mklink — called by ExecStartPost in the service file (runs as root).
+# Reads the PTY slave path written by the daemon and symlinks it to /dev/ttyGS232.
+# Retries for up to 5 seconds to allow the daemon time to write the file.
+
+set -euo pipefail
+
+SLAVE_FILE="/run/gs232-bridge/pty_slave"
+LINK="/dev/ttyGS232"
+TIMEOUT=5
+
+for i in $(seq 1 $TIMEOUT); do
+    if [[ -f "$SLAVE_FILE" ]]; then
+        SLAVE=$(cat "$SLAVE_FILE" | tr -d '[:space:]')
+        if [[ -e "$SLAVE" ]]; then
+            ln -sf "$SLAVE" "$LINK"
+            echo "gs232-mklink: $LINK -> $SLAVE"
+            exit 0
+        fi
+    fi
+    sleep 1
+done
+
+echo "gs232-mklink: timed out waiting for $SLAVE_FILE" >&2
+exit 1
