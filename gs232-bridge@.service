@@ -1,0 +1,29 @@
+[Unit]
+Description=GS-232 telescope bridge
+Documentation=https://github.com/Josh3-14159/rp2040-gpio-fs
+# Start after the FUSE filesystem is mounted (udev+systemd template unit)
+After=network.target rp2040fs@%i.service
+BindsTo=rp2040fs@%i.service
+
+[Service]
+Type=simple
+User=%i
+ExecStart=/usr/bin/python3 /opt/gs232_bridge/main.py --config /opt/gs232_bridge/config.ini
+
+# SIGHUP reloads config without restart
+ExecReload=/bin/kill -HUP $MAINPID
+
+# Clean restart on unexpected crash (not on clean exit or SIGTERM)
+Restart=on-failure
+RestartSec=5
+
+# Give the control loop time to stop motors cleanly before SIGKILL
+TimeoutStopSec=10
+
+# Logging goes to journald automatically
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=gs232-bridge
+
+[Install]
+WantedBy=multi-user.target
